@@ -62,6 +62,52 @@ end
 
 ------------------------------------------------------------------------------
 
+local malloced_sizes = {}
+
+
+--- "Map" some anonymous memory that's not mapped to a file.
+--  This makes mmap behave a bit like malloc, except that we can persuade it
+--  to give us memory above 4G, and malloc will be a very, very slow allocator
+--  so only use it infrequently on big blocks of memory.
+--  This is really just a hack to get us memory above 4G.  There's probably a
+--  better solution.
+--  @treturn pointer: the memory allocated.
+local function malloc(
+  size,         -- integer: number of bytes or `type`s to allocate.
+  type,         -- ?string: type to allocate
+  data)         -- ?pointer: data to copy to the mapped area.
+ 
+  if type then
+    size = size * ffi.sizeof(type)
+  end
+
+  local addr = assert(mmap_4G(size, "read, write", "anon, shared"))
+
+  malloced_sizes[tostring(ffi.cast("void*", addr))] = size
+
+  if data then
+    ffi.copy(addr, data, size)
+  end
+
+  if type then
+    return ffi.cast(type.."*", addr)
+  else
+    return addr
+  end
+end
+
+
+--- Free memory mapped with mmapfile.malloc
+--  Just munmaps the memory.
+local function free(
+  addr)         -- pointer: the mapped address to unmap.
+  local s = tostring(ffi.cast("void*", addr))
+  local size = assert(malloced_sizes[s], "no mmapped block at this address")
+  assert(S.munmap(addr, size))
+end
+
+------------------------------------------------------------------------------
+
 local open_fds = {}
 
 
@@ -103,12 +149,19 @@ local function create(
   size,         -- integer: number of bytes or `type`s to allocate.
   type,         -- ?string: type to allocate
   data)         -- ?pointer: data to copy to the mapped area.
-  local fd = assert(S.open(filename, "RDWR, CREAT", "RUSR, WUSR, RGRP, ROTH"))
+  local fd, message = S.open(filename, "RDWR, CREAT", "RUSR, WUSR, RGRP, ROTH")
  
+  if not fd then
+    error(("mmapfile.create: Error creating '%s': %s"):format(filename, message))
+  end
+
   if type then
     size = size * ffi.sizeof(type)
   end
 
+  -- lseek gets stroppy if we try to seek the -1th byte, so let's just say
+  -- all files are at least one byte, even if theres's no actual data.
+  size = math.max(size, 1)
   assert(fd:lseek(size-1, "set"))
   assert(fd:write(ffi.new("char[1]", 0), 1))
 
@@ -125,17 +178,6 @@ local function create(
   else
     return addr
   end
-end
-
-
---- Same as create, but set up a GC cleanup for the memory and file.
---  @treturn pointer: the memory allocated
-local function gccreate(
-  filename,     -- string: name of the file to create.
-  size,         -- integer: number of bytes or `type`s to allocate.
-  type,         -- ?string: type to allocate
-  data)         -- ?pointer: data to copy to the mapped area.
-  return ffi.gc(create(filename, size, type, data), close)
 end
 
 
@@ -182,25 +224,10 @@ local function open(
   open_fds[tostring(ffi.cast("void*", addr))] = fd
 
   if type then
-    return ffi.cast(type.."*", addr), size / ffi.sizeof(type)
+    return ffi.cast(type.."*", addr), math.floor(size / ffi.sizeof(type))
   else
     return addr, size
   end
-end
-
-
---- Same as open, but set up a GC cleanup for the memory and file.
---  @treturn pointer: the memory allocated.
---  @treturn int: size of the file, in bytes or `type`s.
-local function gcopen(
-  filename,     -- string: name of the file to open.
-  type,         -- ?string: type to allocate
-  mode,         -- ?string: open mode for the file "r" or "rw"
-  size,         -- ?integer: size to map (in multiples of type).  Default
-                -- is file size
-  offset)       -- ?integer: offset into the file (default 0)
-  local addr, size = open(filename, type, mode, size, offset)
-  return ffi.gc(addr, close), size
 end
 
 
@@ -208,11 +235,11 @@ end
 
 return
 {
-  create = create,
-  gccreate = gccreate,
-  open = open,
-  gcopen = gcopen,
-  close = close,
+  free          = free,
+  malloc        = malloc,
+  create        = create,
+  open          = open,
+  close         = close,
 }
 
 ------------------------------------------------------------------------------

@@ -1,10 +1,10 @@
 -- This file was automatically generated for the LuaDist project.
 
 package = "mmapfile"
-version = "1-1"
+version = "2-1"
 -- LuaDist source
 source = {
-  tag = "1-1",
+  tag = "2-1",
   url = "git://github.com/LuaDist-testing/mmapfile.git"
 }
 -- Original source
@@ -12,7 +12,7 @@ source = {
 -- {
 --   url = "git://github.com/geoffleyland/lua-mmapfile.git",
 --   branch = "master",
---   tag = "v1",
+--   tag = "v2",
 -- }
 description =
 {
@@ -23,14 +23,20 @@ description =
 }
 dependencies =
 {
-    'lua == 5.1',               -- should be "luajit >= 2.0.0"
-    'ljsyscall >= 0.9',
+  'lua == 5.1',               -- should be "luajit >= 2.0.0"
+  platforms =
+  {
+    linux = { 'ljsyscall >= 0.9' },
+    macosx = { 'ljsyscall >= 0.9' },
+  }
 }
 build =
 {
   type = "builtin",
   modules =
   {
-    mmapfile = "lua/mmapfile.lua",
+    mmapfile = "src-lua/mmapfile.lua",
+    ["mmapfile.unix"] = "src-lua/mmapfile/unix.lua",
+    ["mmapfile.windows"] = "src-lua/mmapfile/windows.lua",
   },
 }
