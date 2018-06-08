@@ -1,19 +1,11 @@
--- This file was automatically generated for the LuaDist project.
-
 package = "mmapfile"
-version = "2-1"
--- LuaDist source
-source = {
-  tag = "2-1",
-  url = "git://github.com/LuaDist-testing/mmapfile.git"
+version = "3-1"
+source =
+{
+  url = "git://github.com/geoffleyland/lua-mmapfile.git",
+  branch = "master",
+  tag = "v3",
 }
--- Original source
--- source =
--- {
---   url = "git://github.com/geoffleyland/lua-mmapfile.git",
---   branch = "master",
---   tag = "v2",
--- }
 description =
 {
   summary = "Simple memory-mapped files",
